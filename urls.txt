@@ -1,0 +1,8 @@
+// MQTT Standard
+https://mqtt.org/
+
+// An open source MQTT Broker
+https://mosquitto.org/
+
+// A MQTT Explorer Client
+http://mqtt-explorer.com/
