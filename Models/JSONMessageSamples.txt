@@ -1,0 +1,7 @@
+Simio/Dispatch
+
+{"d":[{"SOId":"Order0001","Customer":"test1","MaterialName":"ProductA","SiteObjectName":"LogisticsArea1","ReleaseDate":"0","DueDate":"2","Priority":"74","Quantity":"1"},{"SOId":"Order0002","Customer":"test1","MaterialName":"ProductA","SiteObjectName":"LogisticsArea1","ReleaseDate":"0.0272358333333333","DueDate":"2.02723583333333","Priority":"74","Quantity":"1"},{"SOId":"Order0003","Customer":"test1","MaterialName":"ProductA","SiteObjectName":"LogisticsArea1","ReleaseDate":"0.0698013888888889","DueDate":"2.06980138888889","Priority":"289","Quantity":"1"}]}
+
+Simio/AMR1
+
+{"d": [{"z": "10.00", "x": "0.00"}]}
