@@ -1,7 +1,13 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Data;
+using System.Data.Common;
+using System.IO;
+using System.Xml;
 using SimioAPI;
 using SimioAPI.Extensions;
 using uPLibrary.Networking.M2Mqtt;
@@ -66,20 +72,13 @@ namespace MQTTSync
             _ed = schema.EventDefinitions.AddEvent("ElementEvent");
             _ed.Description = "An event owned by this element";
 
-            schema.ElementFunctions.AddSimpleRealNumberFunction("GetValue", "GetValue", new SimioSimpleRealNumberFunc(GetValue));
-            schema.ElementFunctions.AddSimpleRealNumberFunction("GetRealtimeDate", "GetRealtimeDate", new SimioSimpleRealNumberFunc(GetRealtimeDate));
+            schema.ElementFunctions.AddSimpleStringFunction("GetStringValue", "GetStringValue", new SimioSimpleStringFunc(GetStringValue));
         }
 
-        public double GetValue(object element)
+        public string GetStringValue(object element)
         {
             var myElement = element as MQTTElement;
-            return myElement.getValue();
-        }
-
-        public double GetRealtimeDate(object element)
-        {
-            var myElement = element as MQTTElement;
-            return myElement.getRealtimeDate();
+            return myElement.getStirngValue();
         }
 
         /// <summary>
@@ -97,15 +96,13 @@ namespace MQTTSync
     class MQTTElement : IElement
     {
         IElementData _data;
-
         MqttClient _mqttClient;
-
-        String _value = "0.0";
-        String _prevValue = "0.0";
+        String _value = String.Empty;
+        bool _update = false;
 
         public MQTTElement(IElementData data)
         {
-            _data = data;           
+            _data = data;
         }
 
         #region IElement Members
@@ -124,44 +121,32 @@ namespace MQTTSync
             if (_mqttClient == null)
             {
                 _mqttClient = new MqttClient(broker);
-                _mqttClient.Connect(System.Environment.MachineName + "|" + subscribeTopic);
+                _mqttClient.Connect(_data.ExecutionContext.ExecutionInformation.ResultSetId + "|" + subscribeTopic);
                 if (subscribeTopic.Length > 0)
                 {
-                    _mqttClient.Subscribe(new[] { subscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE });
                     _mqttClient.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
+                    _mqttClient.Subscribe(new[] { subscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
                 }
             }
         }
 
-        public void publishMessage(string topic, string message)
+        public void publishMessage(string topic, string message, int qos, bool retainMessage)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(message);
-            _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, false);
+            if (qos == 1) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
+            else if (qos == 2) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
+            else _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
         }
 
         private void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
             _value = Encoding.UTF8.GetString(e.Message, 0, e.Message.Length);
-            if (_value.ToLowerInvariant() == "on") _value = "1.0";
-            else if (_value.ToLowerInvariant() == "off") _value = "0.0";
-            else if (IsNumericFromTryParse(_value) == false)
-            {
-                if (_prevValue == "0.0") _value = "1.0";
-                else _value = "0.0";
-                _prevValue = _value;
-            }
+            _update = true;
             _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
             {
                 _data.Events["ElementEvent"].Fire();
             });
-        }
-
-        private bool IsNumericFromTryParse(string str)
-        {
-            double result = 0;
-            return (double.TryParse(str, System.Globalization.NumberStyles.Float,
-                    System.Globalization.NumberFormatInfo.CurrentInfo, out result));
-        }
+        }        
 
         /// <summary>
         /// Method called when the simulation run is terminating.
@@ -172,14 +157,19 @@ namespace MQTTSync
             _mqttClient = null;
         }
 
-        public double getValue()
+        public string getStirngValue()
         {
-            return Convert.ToDouble(_value);
+            return _value;
         }
 
-        public double getRealtimeDate()
+        public bool getUpdate()
         {
-            return DateTime.Now.ToOADate();
+            return _update;
+        }
+
+        public void setUpdate(bool update)
+        {
+            _update = update;
         }
 
         #endregion

@@ -65,9 +65,20 @@ namespace MQTTSync
             pd.Description = "Topic Desc";
             pd.Required = true;
 
-            pd = schema.AddExpressionProperty("Payload", "0.0");
+            pd = schema.AddExpressionProperty("Payload", String.Empty);
             pd.DisplayName = "Payload";
             pd.Description = "The payload data to publish to Topic";
+            pd.Required = true;
+
+            pd = schema.AddRealProperty("QualtityOfService", 0);
+            pd.DisplayName = "Qualtity Of Service";
+            pd.Description = "Qualtity Of Service....0nly 0, 1 or 2 are valid...If invalid, 0 is selected";            
+            pd.Required = true;
+
+            pd = schema.AddBooleanProperty("RetainMessage");
+            pd.DisplayName = "Retain Message";
+            pd.Description = "Retain Message";
+            pd.DefaultString = "True";
             pd.Required = true;
 
             // Example of how to add an element property definition to the step.
@@ -95,6 +106,9 @@ namespace MQTTSync
         IElementProperty _mqttElementProp;
         IPropertyReader _topicProp;
         IPropertyReader _payloadProp;
+        IPropertyReader __qOSProp;
+        IPropertyReader _retainMessageProp;
+
 
         public MQTTPublish(IPropertyReaders properties)
         {
@@ -102,6 +116,8 @@ namespace MQTTSync
             _mqttElementProp = (IElementProperty)_properties.GetProperty("MQTTElement");
             _topicProp = (IPropertyReader)_properties.GetProperty("Topic");
             _payloadProp = (IPropertyReader)_properties.GetProperty("Payload");
+            __qOSProp = (IPropertyReader)_properties.GetProperty("QualtityOfService");
+            _retainMessageProp = (IPropertyReader)_properties.GetProperty("RetainMessage");
         }
 
         #region IStep Members
@@ -116,8 +132,13 @@ namespace MQTTSync
             var payloadExpresion = (IExpressionPropertyReader)_payloadProp;
             var payload = payloadExpresion.GetExpressionValue((IExecutionContext)context).ToString();
             string topic = _topicProp.GetStringValue(context);
+            double qOSDouble = __qOSProp.GetDoubleValue(context);
+            int qOS = (int)Math.Floor(qOSDouble);
+            double retainMessageDouble = _retainMessageProp.GetDoubleValue(context);
+            bool retainMessage = false;
+            if (retainMessageDouble > 0) retainMessage = true;
 
-            mqttElementProp.publishMessage(topic, payload);
+            mqttElementProp.publishMessage(topic, payload, qOS, retainMessage);
 
             context.ExecutionInformation.TraceInformation(String.Format("Published Topic : '{0} - Published Payload :'{1}' ", topic, payload));
 
