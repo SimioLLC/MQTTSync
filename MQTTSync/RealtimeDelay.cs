@@ -61,7 +61,7 @@ namespace MQTTSync
             IPropertyDefinition pd;
             pd = schema.AddExpressionProperty("Seconds", "0.0");
             pd.DisplayName = "Seconds";
-            pd.Description = "Seconds Desc.";
+            pd.Description = "Seconds to delay to accomplish sync with world time.";
             pd.Required = true;
         }
 

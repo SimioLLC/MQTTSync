@@ -32,7 +32,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "Description text for the 'MQTTElement' element."; }
+            get { return "MQTT broker connection information."; }
         }
 
         /// <summary>
@@ -133,9 +133,12 @@ namespace MQTTSync
         public void publishMessage(string topic, string message, int qos, bool retainMessage)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(message);
-            if (qos == 1) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
-            else if (qos == 2) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
-            else _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
+            if (qos == 1) 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
+            else if (qos == 2) 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
+            else 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
         }
 
         private void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)

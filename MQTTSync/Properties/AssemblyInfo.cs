@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("MQTTSync")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Illustrates using MQTT to synchronize two Simio Simulations")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Simio LLC")]
 [assembly: AssemblyProduct("MQTTSync")]
@@ -32,5 +32,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.14.0.0")]
-[assembly: AssemblyFileVersion("1.14.0.0")]
+[assembly: AssemblyVersion("22.4.9.0")]
+[assembly: AssemblyFileVersion("22.4.9.0")]
