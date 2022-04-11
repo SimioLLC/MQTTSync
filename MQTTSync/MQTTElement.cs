@@ -60,7 +60,7 @@ namespace MQTTSync
         public void DefineSchema(IElementSchema schema)
         {
             // Example of how to add a property definition to the element.
-            IPropertyDefinition pd = schema.PropertyDefinitions.AddStringProperty("Broker", "10.0.0.192");
+            IPropertyDefinition pd = schema.PropertyDefinitions.AddStringProperty("Broker", "localhost");
             pd.Description = "Broker Name or IP Address";
             pd.Required = true;           
 
@@ -78,7 +78,7 @@ namespace MQTTSync
         public string GetStringValue(object element)
         {
             var myElement = element as MQTTElement;
-            return myElement.getStirngValue();
+            return myElement.getStringValue();
         }
 
         /// <summary>
@@ -120,13 +120,24 @@ namespace MQTTSync
 
             if (_mqttClient == null)
             {
+
+            }
+
+            // Create a unique client id
+            string clientId = $"{_data.ExecutionContext.ExecutionInformation.ResultSetId}|{subscribeTopic}";
+            try
+            {
                 _mqttClient = new MqttClient(broker);
-                _mqttClient.Connect(_data.ExecutionContext.ExecutionInformation.ResultSetId + "|" + subscribeTopic);
+                _mqttClient.Connect(clientId);
                 if (subscribeTopic.Length > 0)
                 {
                     _mqttClient.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
                     _mqttClient.Subscribe(new[] { subscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
                 }
+            }
+            catch (Exception ex)
+            {
+                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={clientId}. Topic={subscribeTopic}. Err={ex.Message}");
             }
         }
 
@@ -160,7 +171,7 @@ namespace MQTTSync
             _mqttClient = null;
         }
 
-        public string getStirngValue()
+        public string getStringValue()
         {
             return _value;
         }
