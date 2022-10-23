@@ -60,19 +60,26 @@ namespace MQTTSync
         public void DefineSchema(IElementSchema schema)
         {
             // Example of how to add a property definition to the element.
-            IPropertyDefinition pd = schema.PropertyDefinitions.AddStringProperty("Broker", "10.0.0.192");
+            IPropertyDefinition pd = schema.PropertyDefinitions.AddStringProperty("Broker", "localhost");
             pd.Description = "Broker Name or IP Address";
             pd.Required = true;           
 
             // Example of how to add a property definition to the element.
-            pd = schema.PropertyDefinitions.AddStringProperty("SubscribeTopic", "Simio/SubscribeTopic");
+            pd = schema.PropertyDefinitions.AddStringProperty("SubscribeTopic", "Simio/#");
             pd.Description = "Subscribe Topic";
             pd.Required = true;
 
             _ed = schema.EventDefinitions.AddEvent("ElementEvent");
             _ed.Description = "An event owned by this element";
 
-            schema.ElementFunctions.AddSimpleStringFunction("GetStringValue", "GetStringValue", new SimioSimpleStringFunc(GetStringValue));
+            schema.ElementFunctions.AddSimpleStringFunction("GetTopic", "GetTopicOfMessage", new SimioSimpleStringFunc(GetTopic));
+            schema.ElementFunctions.AddSimpleStringFunction("GetStringValue", "GetStringValueOfMessage", new SimioSimpleStringFunc(GetStringValue));
+        }
+
+        public string GetTopic(object element)
+        {
+            var myElement = element as MQTTElement;
+            return myElement.getTopic();
         }
 
         public string GetStringValue(object element)
@@ -97,6 +104,7 @@ namespace MQTTSync
     {
         IElementData _data;
         MqttClient _mqttClient;
+        String _topic = String.Empty;
         String _value = String.Empty;
         bool _update = false;
 
@@ -140,6 +148,7 @@ namespace MQTTSync
 
         private void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
         {
+            _topic = e.Topic;
             _value = Encoding.UTF8.GetString(e.Message, 0, e.Message.Length);
             _update = true;
             _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
@@ -153,8 +162,13 @@ namespace MQTTSync
         /// </summary>
         public void Shutdown()
         {
-            _mqttClient.Disconnect();
+            if (_mqttClient.IsConnected) _mqttClient.Disconnect();
             _mqttClient = null;
+        }
+
+        public string getTopic()
+        {
+            return _topic;
         }
 
         public string getStirngValue()
