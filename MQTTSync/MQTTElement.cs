@@ -85,7 +85,7 @@ namespace MQTTSync
         public string GetStringValue(object element)
         {
             var myElement = element as MQTTElement;
-            return myElement.getStringValue();
+            return myElement.getStirngValue();
         }
 
         /// <summary>
