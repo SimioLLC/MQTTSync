@@ -97,10 +97,10 @@ namespace MQTTSync
     // =======================================================================================================
     //
     // We are basing the implementation on "A Predictive Collision Avoidance Model for Multi-Agent Simulation"
-    // by Ioannis Karamouzas. See Chapter 6 of http://www-users.cs.umn.edu/~ioannis/thesis_lowres.pdf
+    // by Ioannis Karamouzas. Springer: https://link.springer.com/chapter/10.1007/978-3-642-10347-6_4
     //
     // =======================================================================================================
-    
+
     public class SteerInfo
     {
         public object Original;

@@ -24,7 +24,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "Description text for the 'RealtimeDelay' step."; }
+            get { return "Synchronizes world (real) time with simulation time using a delay."; }
         }
 
         /// <summary>
@@ -61,7 +61,7 @@ namespace MQTTSync
             IPropertyDefinition pd;
             pd = schema.AddExpressionProperty("Seconds", "0.0");
             pd.DisplayName = "Seconds";
-            pd.Description = "Seconds Desc.";
+            pd.Description = "Seconds to delay to accomplish sync with world time.";
             pd.Required = true;
         }
 
@@ -95,8 +95,8 @@ namespace MQTTSync
         /// </summary>
         public ExitType Execute(IStepExecutionContext context)
         {
-            var secondsExpresion = (IExpressionPropertyReader)_secondProp;
-            double seconds = (double)secondsExpresion.GetExpressionValue((IExecutionContext)context);
+            var secondsExpression = (IExpressionPropertyReader)_secondProp;
+            double seconds = (double)secondsExpression.GetExpressionValue((IExecutionContext)context);
 
             if (seconds > 0)
             {
@@ -106,7 +106,7 @@ namespace MQTTSync
             }
 
             // Example of how to display a trace line for the step.
-            context.ExecutionInformation.TraceInformation(String.Format("The value of real time delay is '{0}' seconds.", seconds.ToString()));
+            context.ExecutionInformation.TraceInformation($"The value of real time delay is '{seconds}' seconds.");
 
             return ExitType.FirstExit;
         }

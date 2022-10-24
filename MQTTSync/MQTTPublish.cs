@@ -24,7 +24,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "Description text for the 'MQTTPublish' step."; }
+            get { return "MQTT Publish of 'payload' with 'topic'"; }
         }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace MQTTSync
 
             pd = schema.AddStringProperty("Topic", "Simio/PublishTopic");
             pd.DisplayName = "Topic";
-            pd.Description = "Topic Desc";
+            pd.Description = "MQTT Topic; by convention, it is hierarchical with slashes";
             pd.Required = true;
 
             pd = schema.AddExpressionProperty("Payload", String.Empty);
@@ -70,21 +70,21 @@ namespace MQTTSync
             pd.Description = "The payload data to publish to Topic";
             pd.Required = true;
 
-            pd = schema.AddRealProperty("QualtityOfService", 0);
-            pd.DisplayName = "Qualtity Of Service";
-            pd.Description = "Qualtity Of Service....0nly 0, 1 or 2 are valid...If invalid, 0 is selected";            
+            pd = schema.AddRealProperty("QualityOfService", 0);
+            pd.DisplayName = "Quality Of Service";
+            pd.Description = "Quality Of Service....0nly 0, 1 or 2 are valid...If invalid, 0 is selected";            
             pd.Required = true;
 
             pd = schema.AddBooleanProperty("RetainMessage");
             pd.DisplayName = "Retain Message";
-            pd.Description = "Retain Message";
+            pd.Description = "Retain Message as 'last good message' for any client subscribing after publish";
             pd.DefaultString = "True";
             pd.Required = true;
 
             // Example of how to add an element property definition to the step.
             pd = schema.AddElementProperty("MQTTElement", MQTTElementDefinition.MY_ID);
             pd.DisplayName = "MQTTElement";
-            pd.Description = "MQTTElement Desc.";
+            pd.Description = "MQTTElement holding MQTT connection information";
             pd.Required = true;
         }
 
@@ -116,7 +116,7 @@ namespace MQTTSync
             _mqttElementProp = (IElementProperty)_properties.GetProperty("MQTTElement");
             _topicProp = (IPropertyReader)_properties.GetProperty("Topic");
             _payloadProp = (IPropertyReader)_properties.GetProperty("Payload");
-            __qOSProp = (IPropertyReader)_properties.GetProperty("QualtityOfService");
+            __qOSProp = (IPropertyReader)_properties.GetProperty("QualityOfService");
             _retainMessageProp = (IPropertyReader)_properties.GetProperty("RetainMessage");
         }
 
@@ -140,7 +140,7 @@ namespace MQTTSync
 
             mqttElementProp.publishMessage(topic, payload, qOS, retainMessage);
 
-            context.ExecutionInformation.TraceInformation(String.Format("Published Topic : '{0} - Published Payload :'{1}' ", topic, payload));
+            context.ExecutionInformation.TraceInformation($"Published Topic : '{topic} - Published Payload :'{payload}' ");
 
             return ExitType.FirstExit;
         }

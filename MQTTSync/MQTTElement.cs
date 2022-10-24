@@ -32,7 +32,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "Description text for the 'MQTTElement' element."; }
+            get { return "MQTT broker connection information."; }
         }
 
         /// <summary>
@@ -85,7 +85,7 @@ namespace MQTTSync
         public string GetStringValue(object element)
         {
             var myElement = element as MQTTElement;
-            return myElement.getStirngValue();
+            return myElement.getStringValue();
         }
 
         /// <summary>
@@ -128,22 +128,36 @@ namespace MQTTSync
 
             if (_mqttClient == null)
             {
+
+            }
+
+            // Create a unique client id
+            string clientId = $"{_data.ExecutionContext.ExecutionInformation.ResultSetId}|{subscribeTopic}";
+            try
+            {
                 _mqttClient = new MqttClient(broker);
-                _mqttClient.Connect(_data.ExecutionContext.ExecutionInformation.ResultSetId + "|" + subscribeTopic);
+                _mqttClient.Connect(clientId);
                 if (subscribeTopic.Length > 0)
                 {
                     _mqttClient.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
                     _mqttClient.Subscribe(new[] { subscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
                 }
             }
+            catch (Exception ex)
+            {
+                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={clientId}. Topic={subscribeTopic}. Err={ex.Message}");
+            }
         }
 
         public void publishMessage(string topic, string message, int qos, bool retainMessage)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(message);
-            if (qos == 1) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
-            else if (qos == 2) _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
-            else _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
+            if (qos == 1) 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
+            else if (qos == 2) 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
+            else 
+                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
         }
 
         private void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
