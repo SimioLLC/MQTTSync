@@ -10,8 +10,12 @@ using System.IO;
 using System.Xml;
 using SimioAPI;
 using SimioAPI.Extensions;
-using uPLibrary.Networking.M2Mqtt;
-using uPLibrary.Networking.M2Mqtt.Messages;
+using MQTTnet.Client;
+using MQTTnet.Extensions.ManagedClient;
+using MQTTnet;
+using MQTTnet.Server;
+using System.Threading.Tasks;
+using System.Runtime.Remoting.Contexts;
 
 namespace MQTTSync
 {
@@ -62,11 +66,22 @@ namespace MQTTSync
             // Example of how to add a property definition to the element.
             IPropertyDefinition pd = schema.PropertyDefinitions.AddStringProperty("Broker", "localhost");
             pd.Description = "Broker Name or IP Address";
-            pd.Required = true;           
+            pd.Required = true;
 
-            // Example of how to add a property definition to the element.
-            pd = schema.PropertyDefinitions.AddStringProperty("SubscribeTopic", "Simio/#");
-            pd.Description = "Subscribe Topic";
+            pd = schema.PropertyDefinitions.AddRealProperty("Port", 1883);
+            pd.Description = "Port";
+            pd.Required = true;
+
+            IRepeatGroupPropertyDefinition subscribeTopics = schema.PropertyDefinitions.AddRepeatGroupProperty("SubscribeTopics");
+            subscribeTopics.Description = "Subscribe Topics.";
+            pd = subscribeTopics.PropertyDefinitions.AddStringProperty("SubscribeTopic", String.Empty);
+            pd.DisplayName = "Subscribe Topic";
+            pd.Description = "Subscribe Topic.";
+            pd.Required = true;
+
+            pd = schema.PropertyDefinitions.AddRealProperty("QualityOfService", 0);
+            pd.DisplayName = "Quality Of Service";
+            pd.Description = "Quality Of Service....0nly 0, 1 or 2 are valid...If invalid, 0 is selected";
             pd.Required = true;
 
             _ed = schema.EventDefinitions.AddEvent("ElementEvent");
@@ -103,10 +118,14 @@ namespace MQTTSync
     class MQTTElement : IElement
     {
         IElementData _data;
-        MqttClient _mqttClient;
+        public MqttFactory MQTTFactory = null;
+        public IManagedMqttClient MQTTClient = null;
         String _topic = String.Empty;
         String _value = String.Empty;
+        string _broker = String.Empty;
+        Int32 _port = 0;
         bool _update = false;
+        double _lastEventTime = -1.0;
 
         public MQTTElement(IElementData data)
         {
@@ -121,63 +140,152 @@ namespace MQTTSync
         public void Initialize()
         {
             IPropertyReader brokerProp = _data.Properties.GetProperty("Broker");
-            string broker = brokerProp.GetStringValue(_data.ExecutionContext);
+            _broker = brokerProp.GetStringValue(_data.ExecutionContext);
 
-            IPropertyReader subscribeTopicProp = _data.Properties.GetProperty("SubscribeTopic");
-            string subscribeTopic = subscribeTopicProp.GetStringValue(_data.ExecutionContext);
+;           IPropertyReader portProp = _data.Properties.GetProperty("Port");
+            _port = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
 
-            if (_mqttClient == null)
+            IPropertyReader qosProp = _data.Properties.GetProperty("QualityOfService");
+            int qos = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
+
+            IRepeatingPropertyReader subscribeTopicsProp = (IRepeatingPropertyReader)_data.Properties.GetProperty("SubscribeTopics");
+
+            int numInSubscribeTopicRepeatGroups = subscribeTopicsProp.GetCount(_data.ExecutionContext);
+            string[] topics = new string[numInSubscribeTopicRepeatGroups];
+
+            for (int i = 0; i < numInSubscribeTopicRepeatGroups; i++)
             {
-
+                // The thing returned from GetRow is IDisposable, so we use the using() pattern here
+                using (IPropertyReaders subscribeTopicsRow = subscribeTopicsProp.GetRow(i, _data.ExecutionContext))
+                {
+                    // Get the string property
+                    IPropertyReader subscribeTopicProp = subscribeTopicsRow.GetProperty("SubscribeTopic");
+                    topics[i] = subscribeTopicProp.GetStringValue(_data.ExecutionContext);
+                }
             }
 
             // Create a unique client id
-            string clientId = $"{_data.ExecutionContext.ExecutionInformation.ResultSetId}|{subscribeTopic}";
+            string clientId = $"{_data.ExecutionContext.ExecutionInformation.ResultSetId}";
             try
             {
-                _mqttClient = new MqttClient(broker);
-                _mqttClient.Connect(clientId);
-                if (subscribeTopic.Length > 0)
+                var subscribeError = SubscribeTopicsAsync(clientId, _broker, _port, topics, qos).Result;
+                if (subscribeError.Length > 0)
                 {
-                    _mqttClient.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
-                    _mqttClient.Subscribe(new[] { subscribeTopic }, new byte[] { MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE });
+                    throw new Exception(subscribeError);
                 }
             }
             catch (Exception ex)
             {
-                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={clientId}. Topic={subscribeTopic}. Err={ex.Message}");
+                var topicsStr = String.Join(",", topics);
+                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={clientId}. Topic={topicsStr}. Err={ex.Message}");
             }
         }
 
-        public void publishMessage(string topic, string message, int qos, bool retainMessage)
+        internal async Task<String> SubscribeTopicsAsync(string clientId, string broker, Int32 port, string[] topics, int qos)
         {
-            byte[] bytes = Encoding.ASCII.GetBytes(message);
-            if (qos == 1) 
-                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, retainMessage);
-            else if (qos == 2) 
-                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_EXACTLY_ONCE, retainMessage);
-            else 
-                _mqttClient.Publish(topic, bytes, MqttMsgBase.QOS_LEVEL_AT_MOST_ONCE, retainMessage);
+            var responseError = String.Empty;
+
+            if (MQTTClient == null)
+            {
+                MQTTFactory = new MqttFactory();
+                MQTTClient = MQTTFactory.CreateManagedMqttClient();
+
+                // Create client options object
+                MqttClientOptionsBuilder builder = new MqttClientOptionsBuilder()
+                                                        .WithClientId(clientId)
+                                                        .WithTcpServer(broker, port);
+
+                ManagedMqttClientOptions options = new ManagedMqttClientOptionsBuilder()
+                                        .WithAutoReconnectDelay(TimeSpan.FromSeconds(60))
+                                        .WithClientOptions(builder.Build())
+                                        .Build();
+
+                await MQTTClient.StartAsync(options);
+
+            }
+
+            try
+            {
+                MQTTClient.ApplicationMessageReceivedAsync += MQTTClient_ApplicationMessageReceivedAsync;
+                foreach (var topic in topics)
+                {
+                    if (qos == 0)
+                        await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                    else if (qos == 1)
+                        await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.ExactlyOnce);
+                    else
+                        await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce);
+                }
+            }
+            catch (Exception ex)
+            {
+                responseError = ex.Message;
+            }
+            return responseError;
         }
 
-        private void Client_MqttMsgPublishReceived(object sender, MqttMsgPublishEventArgs e)
+        internal Task MQTTClient_ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs arg)
         {
-            _topic = e.Topic;
-            _value = Encoding.UTF8.GetString(e.Message, 0, e.Message.Length);
+            _topic = arg.ApplicationMessage.Topic;
+            _value = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload, 0, arg.ApplicationMessage.Payload.Length);
             _update = true;
+
             _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
             {
-                _data.Events["ElementEvent"].Fire();
+                if (_lastEventTime < _data.ExecutionContext.Calendar.TimeNow)
+                {
+                    _lastEventTime = _data.ExecutionContext.Calendar.TimeNow;
+                    _data.Events["ElementEvent"].Fire();
+                }
             });
-        }        
+            return Task.CompletedTask;
+        }
+
+        public async Task<String> PublishMessageAsync(string clientId, string topic, string message, int qos, bool retainMessage)
+        {
+            var responseError = String.Empty;
+
+            try
+            {
+                if (MQTTClient == null)
+                {
+                    MQTTFactory = new MqttFactory();
+                    MQTTClient = MQTTFactory.CreateManagedMqttClient();
+
+                    // Create client options object
+                    MqttClientOptionsBuilder builder = new MqttClientOptionsBuilder()
+                                                            .WithClientId(clientId)
+                                                            .WithTcpServer(_broker, _port);
+                    ManagedMqttClientOptions options = new ManagedMqttClientOptionsBuilder()
+                                            .WithAutoReconnectDelay(TimeSpan.FromSeconds(60))
+                                            .WithClientOptions(builder.Build())
+                                            .Build();
+
+                    await MQTTClient.StartAsync(options);
+
+                }
+
+                byte[] bytes = Encoding.ASCII.GetBytes(message);
+
+                if (qos == 0)
+                    await MQTTClient.EnqueueAsync(topic, message, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retainMessage);
+                else if (qos == 1)
+                    await MQTTClient.EnqueueAsync(topic, message, MQTTnet.Protocol.MqttQualityOfServiceLevel.ExactlyOnce, retainMessage);
+                else
+                    await MQTTClient.EnqueueAsync(topic, message, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce, retainMessage);
+            }
+            catch (Exception ex)
+            {
+                responseError = ex.Message;
+            }
+            return responseError;
+        }
 
         /// <summary>
         /// Method called when the simulation run is terminating.
         /// </summary>
         public void Shutdown()
         {
-            if (_mqttClient.IsConnected) _mqttClient.Disconnect();
-            _mqttClient = null;
         }
 
         public string getTopic()

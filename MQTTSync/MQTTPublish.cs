@@ -138,8 +138,9 @@ namespace MQTTSync
             bool retainMessage = false;
             if (retainMessageDouble > 0) retainMessage = true;
 
-            mqttElementProp.publishMessage(topic, payload, qOS, retainMessage);
-
+            string clientId = $"{context.ExecutionInformation.ResultSetId}";
+            var responseError = mqttElementProp.PublishMessageAsync(clientId, topic, payload, qOS, retainMessage).Result;
+            if (responseError.Length > 0) throw new Exception(responseError);
             context.ExecutionInformation.TraceInformation($"Published Topic : '{topic} - Published Payload :'{payload}' ");
 
             return ExitType.FirstExit;
