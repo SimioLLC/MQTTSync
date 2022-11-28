@@ -3,6 +3,7 @@ using SimioAPI.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Remoting.Contexts;
 using System.Text;
 
 namespace MQTTSync
@@ -60,7 +61,13 @@ namespace MQTTSync
             // Example of how to add a property definition to the step.
             IPropertyDefinition pd;
 
-            pd = schema.AddStringProperty("Topic", "Simio/PublishTopic");
+            // Example of how to add an element property definition to the step.
+            pd = schema.AddElementProperty("MQTTElement", MQTTElementDefinition.MY_ID);
+            pd.DisplayName = "MQTTElement";
+            pd.Description = "MQTTElement holding MQTT connection information";
+            pd.Required = true;
+
+            pd = schema.AddExpressionProperty("Topic", "Simio/PublishTopic");
             pd.DisplayName = "Topic";
             pd.Description = "MQTT Topic; by convention, it is hierarchical with slashes";
             pd.Required = true;
@@ -81,10 +88,8 @@ namespace MQTTSync
             pd.DefaultString = "True";
             pd.Required = true;
 
-            // Example of how to add an element property definition to the step.
-            pd = schema.AddElementProperty("MQTTElement", MQTTElementDefinition.MY_ID);
-            pd.DisplayName = "MQTTElement";
-            pd.Description = "MQTTElement holding MQTT connection information";
+            pd = schema.AddStateProperty("Response");
+            pd.Description = "The state where the response will be read into.";
             pd.Required = true;
         }
 
@@ -108,6 +113,7 @@ namespace MQTTSync
         IPropertyReader _payloadProp;
         IPropertyReader __qOSProp;
         IPropertyReader _retainMessageProp;
+        IPropertyReader _responseProp;
 
 
         public MQTTPublish(IPropertyReaders properties)
@@ -118,6 +124,7 @@ namespace MQTTSync
             _payloadProp = (IPropertyReader)_properties.GetProperty("Payload");
             __qOSProp = (IPropertyReader)_properties.GetProperty("QualityOfService");
             _retainMessageProp = (IPropertyReader)_properties.GetProperty("RetainMessage");
+            _responseProp = (IPropertyReader)_properties.GetProperty("Response");
         }
 
         #region IStep Members
@@ -129,19 +136,23 @@ namespace MQTTSync
         {
             MQTTElement mqttElementProp = (MQTTElement)_mqttElementProp.GetElement(context);
 
-            var payloadExpresion = (IExpressionPropertyReader)_payloadProp;
-            var payload = payloadExpresion.GetExpressionValue((IExecutionContext)context).ToString();
-            string topic = _topicProp.GetStringValue(context);
+            var payloadExpression = (IExpressionPropertyReader)_payloadProp;
+            var payload = payloadExpression.GetExpressionValue((IExecutionContext)context).ToString();
+            var topicExpression = (IExpressionPropertyReader)_topicProp;
+            var topic = topicExpression.GetExpressionValue((IExecutionContext)context).ToString();
             double qOSDouble = __qOSProp.GetDoubleValue(context);
             int qOS = (int)Math.Floor(qOSDouble);
             double retainMessageDouble = _retainMessageProp.GetDoubleValue(context);
             bool retainMessage = false;
             if (retainMessageDouble > 0) retainMessage = true;
+            IStateProperty responseStateProp = (IStateProperty)_responseProp;
+            IState responseState = responseStateProp.GetState(context);
+            IStringState responseStringState = responseState as IStringState;
 
-            string clientId = $"{context.ExecutionInformation.ResultSetId}";
-            var responseError = mqttElementProp.PublishMessageAsync(clientId, topic, payload, qOS, retainMessage).Result;
-            if (responseError.Length > 0) throw new Exception(responseError);
-            context.ExecutionInformation.TraceInformation($"Published Topic : '{topic} - Published Payload :'{payload}' ");
+            var response = mqttElementProp.PublishMessageAsync(topic, payload, qOS, retainMessage).Result;
+            responseStringState.Value = response;
+
+            context.ExecutionInformation.TraceInformation($"Published Topic : '{topic} - Published Payload :'{payload}' - Response :'{response}'");
 
             return ExitType.FirstExit;
         }

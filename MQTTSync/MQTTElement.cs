@@ -16,6 +16,7 @@ using MQTTnet;
 using MQTTnet.Server;
 using System.Threading.Tasks;
 using System.Runtime.Remoting.Contexts;
+using System.Web;
 
 namespace MQTTSync
 {
@@ -72,6 +73,10 @@ namespace MQTTSync
             pd.Description = "Port";
             pd.Required = true;
 
+            pd = schema.PropertyDefinitions.AddExpressionProperty("ClientId", "Name");
+            pd.Description = "ClientId";
+            pd.Required = true;
+
             IRepeatGroupPropertyDefinition subscribeTopics = schema.PropertyDefinitions.AddRepeatGroupProperty("SubscribeTopics");
             subscribeTopics.Description = "Subscribe Topics.";
             pd = subscribeTopics.PropertyDefinitions.AddStringProperty("SubscribeTopic", String.Empty);
@@ -124,8 +129,10 @@ namespace MQTTSync
         String _value = String.Empty;
         string _broker = String.Empty;
         Int32 _port = 0;
+        string _clientId = String.Empty;
+        int _qos= 0;
         bool _update = false;
-        double _lastEventTime = -1.0;
+        string[] _topics;
 
         public MQTTElement(IElementData data)
         {
@@ -145,13 +152,17 @@ namespace MQTTSync
 ;           IPropertyReader portProp = _data.Properties.GetProperty("Port");
             _port = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
 
+            IPropertyReader clientIdProp = _data.Properties.GetProperty("ClientId");
+            var clientIdExpression = (IExpressionPropertyReader)clientIdProp;
+            _clientId = clientIdExpression.GetExpressionValue((IExecutionContext)_data.ExecutionContext).ToString();
+
             IPropertyReader qosProp = _data.Properties.GetProperty("QualityOfService");
-            int qos = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
+            _qos = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
 
             IRepeatingPropertyReader subscribeTopicsProp = (IRepeatingPropertyReader)_data.Properties.GetProperty("SubscribeTopics");
 
             int numInSubscribeTopicRepeatGroups = subscribeTopicsProp.GetCount(_data.ExecutionContext);
-            string[] topics = new string[numInSubscribeTopicRepeatGroups];
+            _topics = new string[numInSubscribeTopicRepeatGroups];
 
             for (int i = 0; i < numInSubscribeTopicRepeatGroups; i++)
             {
@@ -160,15 +171,13 @@ namespace MQTTSync
                 {
                     // Get the string property
                     IPropertyReader subscribeTopicProp = subscribeTopicsRow.GetProperty("SubscribeTopic");
-                    topics[i] = subscribeTopicProp.GetStringValue(_data.ExecutionContext);
+                    _topics[i] = subscribeTopicProp.GetStringValue(_data.ExecutionContext);
                 }
             }
 
-            // Create a unique client id
-            string clientId = $"{_data.ExecutionContext.ExecutionInformation.ResultSetId}";
             try
             {
-                var subscribeError = SubscribeTopicsAsync(clientId, _broker, _port, topics, qos).Result;
+                var subscribeError = SubscribeTopicsAsync().Result;
                 if (subscribeError.Length > 0)
                 {
                     throw new Exception(subscribeError);
@@ -176,12 +185,12 @@ namespace MQTTSync
             }
             catch (Exception ex)
             {
-                var topicsStr = String.Join(",", topics);
-                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={clientId}. Topic={topicsStr}. Err={ex.Message}");
+                var topicsStr = String.Join(",", _topics);
+                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={_clientId}. Topic={topicsStr}. Err={ex.Message}");
             }
         }
 
-        internal async Task<String> SubscribeTopicsAsync(string clientId, string broker, Int32 port, string[] topics, int qos)
+        internal async Task<String> SubscribeTopicsAsync()
         {
             var responseError = String.Empty;
 
@@ -192,8 +201,8 @@ namespace MQTTSync
 
                 // Create client options object
                 MqttClientOptionsBuilder builder = new MqttClientOptionsBuilder()
-                                                        .WithClientId(clientId)
-                                                        .WithTcpServer(broker, port);
+                                                        .WithClientId(_clientId)
+                                                        .WithTcpServer(_broker, _port);
 
                 ManagedMqttClientOptions options = new ManagedMqttClientOptionsBuilder()
                                         .WithAutoReconnectDelay(TimeSpan.FromSeconds(60))
@@ -207,11 +216,11 @@ namespace MQTTSync
             try
             {
                 MQTTClient.ApplicationMessageReceivedAsync += MQTTClient_ApplicationMessageReceivedAsync;
-                foreach (var topic in topics)
+                foreach (var topic in _topics)
                 {
-                    if (qos == 0)
+                    if (_qos == 0)
                         await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
-                    else if (qos == 1)
+                    else if (_qos == 1)
                         await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.ExactlyOnce);
                     else
                         await MQTTClient.SubscribeAsync(topic, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce);
@@ -224,6 +233,30 @@ namespace MQTTSync
             return responseError;
         }
 
+        internal async Task<String> UnSubscribeTopicsAndDisconnectAsync()
+        {
+            var responseError = String.Empty;
+
+            if (MQTTClient != null)
+            {          
+                try
+                {
+                    MQTTClient.ApplicationMessageReceivedAsync -= MQTTClient_ApplicationMessageReceivedAsync;
+                    foreach (var topic in _topics)
+                    {
+                        await MQTTClient.UnsubscribeAsync(topic);
+                    }
+                    MQTTClient.Dispose();
+                    MQTTClient =  null;
+                }
+                catch (Exception ex)
+                {
+                    responseError = ex.Message;
+                }
+            }
+            return responseError;
+        }
+
         internal Task MQTTClient_ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs arg)
         {
             _topic = arg.ApplicationMessage.Topic;
@@ -232,18 +265,14 @@ namespace MQTTSync
 
             _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
             {
-                if (_lastEventTime < _data.ExecutionContext.Calendar.TimeNow)
-                {
-                    _lastEventTime = _data.ExecutionContext.Calendar.TimeNow;
-                    _data.Events["ElementEvent"].Fire();
-                }
+                _data.Events["ElementEvent"].Fire();
             });
             return Task.CompletedTask;
         }
 
-        public async Task<String> PublishMessageAsync(string clientId, string topic, string message, int qos, bool retainMessage)
+        public async Task<String> PublishMessageAsync(string topic, string message, int qos, bool retainMessage)
         {
-            var responseError = String.Empty;
+            var response = String.Empty;
 
             try
             {
@@ -254,7 +283,7 @@ namespace MQTTSync
 
                     // Create client options object
                     MqttClientOptionsBuilder builder = new MqttClientOptionsBuilder()
-                                                            .WithClientId(clientId)
+                                                            .WithClientId(_clientId)
                                                             .WithTcpServer(_broker, _port);
                     ManagedMqttClientOptions options = new ManagedMqttClientOptionsBuilder()
                                             .WithAutoReconnectDelay(TimeSpan.FromSeconds(60))
@@ -273,12 +302,13 @@ namespace MQTTSync
                     await MQTTClient.EnqueueAsync(topic, message, MQTTnet.Protocol.MqttQualityOfServiceLevel.ExactlyOnce, retainMessage);
                 else
                     await MQTTClient.EnqueueAsync(topic, message, MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce, retainMessage);
+                response = "Success";
             }
             catch (Exception ex)
             {
-                responseError = ex.Message;
+                response = ex.Message;
             }
-            return responseError;
+            return response;
         }
 
         /// <summary>
@@ -286,6 +316,11 @@ namespace MQTTSync
         /// </summary>
         public void Shutdown()
         {
+            var unsubscribeError = UnSubscribeTopicsAndDisconnectAsync().Result;
+            if (unsubscribeError.Length > 0)
+            {
+                throw new Exception(unsubscribeError);
+            }
         }
 
         public string getTopic()
