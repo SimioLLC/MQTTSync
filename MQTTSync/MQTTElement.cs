@@ -18,6 +18,7 @@ using System.Threading.Tasks;
 using System.Runtime.Remoting.Contexts;
 using System.Web;
 
+
 namespace MQTTSync
 {
     class MQTTElementDefinition : IElementDefinition
@@ -92,6 +93,11 @@ namespace MQTTSync
             _ed = schema.EventDefinitions.AddEvent("ElementEvent");
             _ed.Description = "An event owned by this element";
 
+            pd = schema.PropertyDefinitions.AddRealProperty("MinEventFrequency", 0.5);
+            pd.DisplayName = "Min Event Frequency(Seconds)";
+            pd.Description = "Min Event Frequency..Min amount of time (in seconds) that element even will be fired";
+            pd.Required = true;
+
             schema.ElementFunctions.AddSimpleStringFunction("GetTopic", "GetTopicOfMessage", new SimioSimpleStringFunc(GetTopic));
             schema.ElementFunctions.AddSimpleStringFunction("GetStringValue", "GetStringValueOfMessage", new SimioSimpleStringFunc(GetStringValue));
         }
@@ -129,6 +135,8 @@ namespace MQTTSync
         String _value = String.Empty;
         string _broker = String.Empty;
         Int32 _port = 0;
+        Double _minEventFrequency= Double.MaxValue;
+        DateTime _lastEventDateTime = DateTime.MinValue;
         string _clientId = String.Empty;
         int _qos= 0;
         bool _update = false;
@@ -157,7 +165,7 @@ namespace MQTTSync
             _clientId = clientIdExpression.GetExpressionValue((IExecutionContext)_data.ExecutionContext).ToString();
 
             IPropertyReader qosProp = _data.Properties.GetProperty("QualityOfService");
-            _qos = Convert.ToInt32(portProp.GetDoubleValue(_data.ExecutionContext));
+            _qos = Convert.ToInt32(qosProp.GetDoubleValue(_data.ExecutionContext));
 
             IRepeatingPropertyReader subscribeTopicsProp = (IRepeatingPropertyReader)_data.Properties.GetProperty("SubscribeTopics");
 
@@ -174,6 +182,11 @@ namespace MQTTSync
                     _topics[i] = subscribeTopicProp.GetStringValue(_data.ExecutionContext);
                 }
             }
+
+            IPropertyReader minEventFreqProp = _data.Properties.GetProperty("MinEventFrequency");
+            _minEventFrequency = minEventFreqProp.GetDoubleValue(_data.ExecutionContext);
+
+            if (_minEventFrequency <= 0) throw new Exception("Min Event Property Must Be Greater Than Zero");
 
             try
             {
@@ -260,15 +273,21 @@ namespace MQTTSync
         internal Task MQTTClient_ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs arg)
         {
             _topic = arg.ApplicationMessage.Topic;
-            _value = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload, 0, arg.ApplicationMessage.Payload.Length);
-            _update = true;
+            _value = Encoding.Default.GetString(arg.ApplicationMessage.Payload, 0, arg.ApplicationMessage.Payload.Length);
 
-            _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
+            if (DateTime.Now >= _lastEventDateTime.AddSeconds(_minEventFrequency))
             {
-                _data.Events["ElementEvent"].Fire();
-            });
+                _lastEventDateTime = DateTime.Now;
+                _update = true;
+
+                _data.ExecutionContext.Calendar.ScheduleCurrentEvent(null, (obj) =>
+                {
+                    _data.Events["ElementEvent"].Fire();
+                });
+            }
             return Task.CompletedTask;
         }
+
 
         public async Task<String> PublishMessageAsync(string topic, string message, int qos, bool retainMessage)
         {

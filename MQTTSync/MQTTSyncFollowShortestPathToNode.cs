@@ -109,8 +109,7 @@ namespace MQTTSync
         public FacilityDirection EntityUnitDirection;
         public double EntityVelocity;
         public double EntityDesiredVelocity;
-        public FacilityDirection EntityDirectionalVelocity;
-        
+        public FacilityDirection EntityDirectionalVelocity;        
 
         public double EntityRadius;
         public double EntityPsychophysicalRadius;
@@ -206,7 +205,7 @@ namespace MQTTSync
             //
             // Update cached information about the agents to avoid
             //
-            UpdateCachedEvasionTargets();
+            //UpdateCachedEvasionTargets();
 
             if (_updateList == null || _updateList.Length < _activeSteeringRules.Count)
                 _updateList = new UpdateInfo[_activeSteeringRules.Count];
@@ -537,7 +536,7 @@ namespace MQTTSync
         const int MAX_NEARBY_AGENTS_TO_EVADE = 5;
         const double NOISE_DISTANCE_SCALE = 0.25;
         const double PSYCHOPHYSICAL_RADIUS_SCALE = 0.25;
-        const double MIN_DISTANCE_TO_TRAVEL_TO_CHANGE_DIRECTION = 0.025;
+        const double MIN_DISTANCE_TO_TRAVEL_TO_CHANGE_DIRECTION = 10;///0.025;  
 
         public ITravelSteeringBehaviorContext TravelContext => _context;
         ITravelSteeringBehaviorContext _context;
@@ -579,7 +578,7 @@ namespace MQTTSync
                 //
                 // We set the movement one more time to make sure the entity is now not trying to rise off the floor
                 //
-                var zeroYUnitDirection = new FacilityDirection(steerInfo.EntityUnitDirection.dX, 0.0, steerInfo.EntityUnitDirection.dZ);
+                var zeroYUnitDirection = new FacilityDirection(0.0, 0.0, 0.0);  //new FacilityDirection(steerInfo.EntityUnitDirection.dX, 0.0, steerInfo.EntityUnitDirection.dZ);
 
                 if (mqttElement.getUpdate() == true)
                 {
@@ -630,7 +629,7 @@ namespace MQTTSync
 
             var force = forceGoal + forceWall + forceEvasion + forceNoise;
 
-            var forceNoY = new FacilityDirection(force.dX, 0.0, force.dZ);
+            var forceNoY = new FacilityDirection(0.0, 0.0, 0.0); // new FacilityDirection(force.dX, 0.0, force.dZ);
 
             bFinished = false;
             finishedTrace = null;

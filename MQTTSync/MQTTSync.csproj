@@ -18,7 +18,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Executables\</OutputPath>
+    <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>3</WarningLevel>
@@ -36,14 +36,14 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="MQTTnet, Version=4.1.3.436, Culture=neutral, PublicKeyToken=fdb7629f2e364a63, processorArchitecture=MSIL">
-      <HintPath>..\packages\MQTTnet.4.1.3.436\lib\net461\MQTTnet.dll</HintPath>
+    <Reference Include="MQTTnet, Version=4.1.4.563, Culture=neutral, PublicKeyToken=fdb7629f2e364a63, processorArchitecture=MSIL">
+      <HintPath>packages\MQTTnet.4.1.4.563\lib\net461\MQTTnet.dll</HintPath>
     </Reference>
-    <Reference Include="MQTTnet.Extensions.ManagedClient, Version=4.1.3.436, Culture=neutral, PublicKeyToken=fdb7629f2e364a63, processorArchitecture=MSIL">
-      <HintPath>..\packages\MQTTnet.Extensions.ManagedClient.4.1.3.436\lib\net461\MQTTnet.Extensions.ManagedClient.dll</HintPath>
+    <Reference Include="MQTTnet.Extensions.ManagedClient, Version=4.1.4.563, Culture=neutral, PublicKeyToken=fdb7629f2e364a63, processorArchitecture=MSIL">
+      <HintPath>packages\MQTTnet.Extensions.ManagedClient.4.1.4.563\lib\net461\MQTTnet.Extensions.ManagedClient.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="SimioAPI">
       <HintPath>C:\Program Files\Simio LLC\Simio\SimioAPI.dll</HintPath>
@@ -59,15 +59,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BaseSteeringBehaviors.cs" />
-    <Compile Include="MQTTSyncFollowShortestPathToNode.cs" />
     <Compile Include="MQTTElement.cs" />
     <Compile Include="MQTTPublish.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="MQTTSyncHelper.cs" />
-    <Compile Include="TextReaderExtensions.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
