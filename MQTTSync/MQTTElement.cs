@@ -17,6 +17,8 @@ using MQTTnet.Server;
 using System.Threading.Tasks;
 using System.Runtime.Remoting.Contexts;
 using System.Web;
+using System.Runtime.Remoting.Messaging;
+using System.Collections;
 
 
 namespace MQTTSync
@@ -141,6 +143,7 @@ namespace MQTTSync
         int _qos= 0;
         bool _update = false;
         string[] _topics;
+        Dictionary<string, List<string>> _topicMessages = new Dictionary<string, List<string>>();
 
         public MQTTElement(IElementData data)
         {
@@ -275,6 +278,9 @@ namespace MQTTSync
             _topic = arg.ApplicationMessage.Topic;
             _value = Encoding.Default.GetString(arg.ApplicationMessage.Payload, 0, arg.ApplicationMessage.Payload.Length);
 
+            if (!_topicMessages.ContainsKey(_topic)) _topicMessages.Add(_topic, new List<string>{ _value });
+            else _topicMessages[_topic].Add(_value);
+
             if (DateTime.Now >= _lastEventDateTime.AddSeconds(_minEventFrequency))
             {
                 _lastEventDateTime = DateTime.Now;
@@ -287,7 +293,6 @@ namespace MQTTSync
             }
             return Task.CompletedTask;
         }
-
 
         public async Task<String> PublishMessageAsync(string topic, string message, int qos, bool retainMessage)
         {
@@ -328,6 +333,208 @@ namespace MQTTSync
                 response = ex.Message;
             }
             return response;
+        }
+
+        public string GetMessageToPublish(string[,] stringArray, string[] columnNames, int numOfRows)
+        {
+            // define data table
+            DataTable dataTable = new DataTable();
+            dataTable.Locale = System.Globalization.CultureInfo.InvariantCulture;
+            int numberOfColumns = (int)(stringArray.Length / numOfRows);
+
+            for (int i = 0; i < numberOfColumns; i++)
+            {
+                dataTable.Columns.Add(columnNames[i]);
+            }
+
+            DataTable[] dataTables = { dataTable };
+            // define data row
+            DataRow dataRow = null;
+
+            // for each parameter
+            for (int i = 0; i < numOfRows; i++)
+            {
+                for (int j = 0; j < numberOfColumns; j++)
+                {
+                    if (j == 0)
+                    {
+                        dataRow = dataTable.NewRow();
+                    }
+                    dataRow[j] = stringArray[i, j];
+                }
+                dataTable.Rows.Add(dataRow);
+            }
+
+            return JsonConvert.SerializeObject(dataTable);
+
+        }
+
+        public string[,] GetArrayOfSubscriptions(string topicName, string stylesheet, int numOfColumns, out string[,] stringArray, out int numOfRows)
+        {
+            var mergedDataSet = new DataSet();
+            mergedDataSet.Locale = System.Globalization.CultureInfo.InvariantCulture;
+            List<string> requestResults = new List<string>();
+
+            if (_topicMessages.ContainsKey(topicName))
+            {
+                foreach (string message in _topicMessages[topicName])
+                {
+                    requestResults.Add(MQTTElement.ParseDataToXML(message, topicName, out var parseError));
+                    if (parseError.Length > 0)
+                    {
+                        throw new Exception(parseError);
+                    }
+                }
+
+                _topicMessages[topicName].Clear();
+            }
+
+            if (requestResults.Count > 0)
+            {
+                foreach (var requestResult in requestResults)
+                {
+                    var transformedResult = Simio.Xml.XsltTransform.TransformXmlToDataSet(requestResult, stylesheet, null);
+                    if (transformedResult.XmlTransformError != null)
+                        throw new Exception(transformedResult.XmlTransformError);
+                    if (transformedResult.DataSetLoadError != null)
+                        throw new Exception(transformedResult.DataSetLoadError);
+                    if (transformedResult.DataSet.Tables.Count > 0) numOfRows = transformedResult.DataSet.Tables[0].Rows.Count;
+                    else numOfRows = 0;
+                    if (numOfRows > 0)
+                    {
+                        transformedResult.DataSet.AcceptChanges();
+                        if (mergedDataSet.Tables.Count == 0) mergedDataSet.Merge(transformedResult.DataSet);
+                        else mergedDataSet.Tables[0].Merge(transformedResult.DataSet.Tables[0]);
+                        mergedDataSet.AcceptChanges();
+                    }
+                    var xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(requestResult);
+                }
+            }
+
+            if (mergedDataSet.Tables.Count == 0 || mergedDataSet.Tables[0].Rows.Count == 0)
+            {
+                numOfRows = 0;
+                stringArray = new string[numOfRows, numOfColumns];
+            }
+            else
+            {
+                numOfRows = mergedDataSet.Tables[0].Rows.Count;
+                stringArray = new string[numOfRows, numOfColumns];
+                int rowNumber = -1;
+                foreach (DataRow dataRow in mergedDataSet.Tables[0].Rows)
+                {
+                    rowNumber++;
+                    for (int col = 0; col < mergedDataSet.Tables[0].Columns.Count; col++)
+                    {
+                        stringArray[rowNumber, col] = dataRow.ItemArray[col].ToString();
+                    }
+                }
+            }
+
+            return stringArray;
+        }
+
+        internal static string ParseDataToXML(string responseString, string topic, out string responseError)
+        {
+            responseError = String.Empty;
+
+            // no response
+            if (responseString.Length == 0) return responseString;
+
+            bool isXMLResponse = false;
+            bool isProbablyJSONObject = false;
+            XmlDocument xmlDoc;
+            if (responseString.Contains("xml"))
+            {
+                isXMLResponse = true;
+            }
+            else
+            {
+                isProbablyJSONObject = checkIsProbablyJSONObject(responseString);
+            }
+
+            if (isXMLResponse)
+            {
+                return responseString;
+            }
+            else // Default to assume a JSON response
+            {
+                xmlDoc = JSONToXMLDoc(responseString, isProbablyJSONObject);
+            }
+
+            return xmlDoc.InnerXml;
+        }
+
+        internal static void logStatus(string dataConnector, string pathAndFilename, string sendText, string responseError, string deliminator, double exportStartTimeOffsetHours)
+        {
+            try
+            {
+                using (System.IO.StreamWriter file = new System.IO.StreamWriter(pathAndFilename, true))
+                {
+                    string statusText = System.DateTime.Now.AddHours(exportStartTimeOffsetHours).ToString() + deliminator + dataConnector + deliminator + sendText + deliminator;
+                    if (responseError.Length == 0) statusText += "Success" + deliminator + responseError;
+                    else statusText += "Error" + deliminator + responseError;
+                    file.WriteLine(statusText);
+                }
+            }
+            catch { }
+        }
+
+        internal static bool checkIsProbablyJSONObject(string resultString)
+        {
+            // We are looking for the first non-whitespace character (and are specifically not Trim()ing here
+            //  to eliminate memory allocations on potentially large (we think?) strings
+            foreach (var theChar in resultString)
+            {
+                if (Char.IsWhiteSpace(theChar))
+                    continue;
+
+                if (theChar == '{')
+                {
+                    return true;
+                }
+                else if (theChar == '<')
+                {
+                    return false;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return false;
+        }
+
+        internal static XmlDocument JSONToXMLDoc(string resultString, bool isProbablyJSONObject)
+        {
+            XmlDocument xmlDoc;
+            resultString = resultString.Replace("@", string.Empty);
+            if (isProbablyJSONObject == false)
+            {
+                var prefix = "{ items: ";
+                var postfix = "}";
+
+                using (var combinedReader = new StringReader(prefix)
+                                            .Concat(new StringReader(resultString))
+                                            .Concat(new StringReader(postfix)))
+                {
+                    var settings = new JsonSerializerSettings
+                    {
+                        Converters = { new Newtonsoft.Json.Converters.XmlNodeConverter() { DeserializeRootElementName = "data" } },
+                        DateParseHandling = DateParseHandling.None,
+                    };
+                    using (var jsonReader = new JsonTextReader(combinedReader) { CloseInput = false, DateParseHandling = DateParseHandling.None })
+                    {
+                        xmlDoc = JsonSerializer.CreateDefault(settings).Deserialize<XmlDocument>(jsonReader);
+                    }
+                }
+            }
+            else
+            {
+                xmlDoc = Newtonsoft.Json.JsonConvert.DeserializeXmlNode(resultString, "data");
+            }
+            return xmlDoc;
         }
 
         /// <summary>
