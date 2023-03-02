@@ -92,6 +92,12 @@ namespace MQTTSync
             pd.Description = "Quality Of Service....0nly 0, 1 or 2 are valid...If invalid, 0 is selected";
             pd.Required = true;
 
+            pd = schema.PropertyDefinitions.AddBooleanProperty("PersistSubscribedMessages");
+            pd.DisplayName = "Persist Subscribed Messages";
+            pd.Description = "Persist Subscribed Messages to be retreived using MQTTSubscriptionsIntoOutputTable step";
+            pd.DefaultString = "False";
+            pd.Required = true;
+
             _ed = schema.EventDefinitions.AddEvent("ElementEvent");
             _ed.Description = "An event owned by this element";
 
@@ -144,6 +150,7 @@ namespace MQTTSync
         bool _update = false;
         string[] _topics;
         Dictionary<string, List<string>> _topicMessages = new Dictionary<string, List<string>>();
+        bool _persistSubscribedMessages = false;
 
         public MQTTElement(IElementData data)
         {
@@ -169,6 +176,9 @@ namespace MQTTSync
 
             IPropertyReader qosProp = _data.Properties.GetProperty("QualityOfService");
             _qos = Convert.ToInt32(qosProp.GetDoubleValue(_data.ExecutionContext));
+
+            IPropertyReader persistSubscrivedMessagesProp = _data.Properties.GetProperty("PersistSubscribedMessages");
+            _persistSubscribedMessages = Convert.ToBoolean(persistSubscrivedMessagesProp.GetDoubleValue(_data.ExecutionContext));
 
             IRepeatingPropertyReader subscribeTopicsProp = (IRepeatingPropertyReader)_data.Properties.GetProperty("SubscribeTopics");
 
@@ -278,8 +288,11 @@ namespace MQTTSync
             _topic = arg.ApplicationMessage.Topic;
             _value = Encoding.Default.GetString(arg.ApplicationMessage.Payload, 0, arg.ApplicationMessage.Payload.Length);
 
-            if (!_topicMessages.ContainsKey(_topic)) _topicMessages.Add(_topic, new List<string>{ _value });
-            else _topicMessages[_topic].Add(_value);
+            if (_persistSubscribedMessages == true)
+            {
+                if (!_topicMessages.ContainsKey(_topic)) _topicMessages.Add(_topic, new List<string> { _value });
+                else _topicMessages[_topic].Add(_value);
+            }
 
             if (DateTime.Now >= _lastEventDateTime.AddSeconds(_minEventFrequency))
             {
@@ -464,21 +477,6 @@ namespace MQTTSync
             }
 
             return xmlDoc.InnerXml;
-        }
-
-        internal static void logStatus(string dataConnector, string pathAndFilename, string sendText, string responseError, string deliminator, double exportStartTimeOffsetHours)
-        {
-            try
-            {
-                using (System.IO.StreamWriter file = new System.IO.StreamWriter(pathAndFilename, true))
-                {
-                    string statusText = System.DateTime.Now.AddHours(exportStartTimeOffsetHours).ToString() + deliminator + dataConnector + deliminator + sendText + deliminator;
-                    if (responseError.Length == 0) statusText += "Success" + deliminator + responseError;
-                    else statusText += "Error" + deliminator + responseError;
-                    file.WriteLine(statusText);
-                }
-            }
-            catch { }
         }
 
         internal static bool checkIsProbablyJSONObject(string resultString)

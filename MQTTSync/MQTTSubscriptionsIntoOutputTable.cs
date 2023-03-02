@@ -23,7 +23,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "The MQTTSubscriptionsIntoOutputTable step may be used read data from a database."; }
+            get { return "The MQTTSubscriptionsIntoOutputTable step is used read data from persisted message(s)."; }
         }
 
         /// <summary>
@@ -110,7 +110,7 @@ namespace MQTTSync
         IPropertyReader _sourceTopicProp;
         ITableReferencePropertyReader _destinationTableReaderProp;
         IPropertyReader _clearRowsBeforeGettingSubscriptionsProp;
-        IPropertyReader _stylesheetTopicProp;
+        IPropertyReader _stylesheetProp;
 
         public MQTTSubscriptionsIntoOutputTable(IPropertyReaders properties)
         {
@@ -119,7 +119,7 @@ namespace MQTTSync
             _sourceTopicProp = _props.GetProperty("SourceTopic");
             _destinationTableReaderProp = (ITableReferencePropertyReader)_props.GetProperty("DestinationTable");
             _clearRowsBeforeGettingSubscriptionsProp = (IPropertyReader)_props.GetProperty("ClearRowsBeforeGettingSubscriptions");
-            _stylesheetTopicProp = _props.GetProperty("Stylesheet");
+            _stylesheetProp = _props.GetProperty("Stylesheet");
         }
 
         #region IStep Members
@@ -136,7 +136,7 @@ namespace MQTTSync
             bool clearRowsBeforeGettingSubscriptions = false;
             if (clearRowsBeforeGettingSubscriptionsDouble > 0) clearRowsBeforeGettingSubscriptions = true;
             if (clearRowsBeforeGettingSubscriptions == true) sourceTable.RemoveAllRows(context);
-            String stylesheet = _stylesheetTopicProp.GetStringValue(context);
+            String stylesheet = _stylesheetProp.GetStringValue(context);
 
             int numOfColumns = sourceTable.Table.Columns.Count + sourceTable.Table.StateColumns.Count;
 

@@ -24,7 +24,7 @@ namespace MQTTSync
         /// </summary>
         public string Description
         {
-            get { return "The MQTTPublishFromOutputTable step may be used to write data to a database."; }
+            get { return "The MQTTPublishFromOutputTable step is used to publish table data to a topic."; }
         }
 
         /// <summary>
