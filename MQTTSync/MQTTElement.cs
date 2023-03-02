@@ -396,8 +396,9 @@ namespace MQTTSync
                 {
                     //  local collection to avoid locking of public list
                     var receivedTopicMessages = _topicMessages[topicName].ToArray();
-                    _topicMessages[topicName].Clear();
-                
+                    var numberOfMessages = receivedTopicMessages.Length;
+                    _topicMessages[topicName].RemoveRange(0, numberOfMessages);
+                 
                     foreach (string message in receivedTopicMessages)
                     {
                         requestResults.Add(MQTTElement.ParseDataToXML(message, out var parseError));
