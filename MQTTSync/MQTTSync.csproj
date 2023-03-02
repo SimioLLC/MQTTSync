@@ -68,6 +68,7 @@
     <Compile Include="MQTTPublishFromOutputTable.cs" />
     <Compile Include="MQTTElement.cs" />
     <Compile Include="MQTTPublish.cs" />
+    <Compile Include="NewGuid.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TextReaderExtensions.cs" />
     <Compile Include="XsltTransform.cs" />

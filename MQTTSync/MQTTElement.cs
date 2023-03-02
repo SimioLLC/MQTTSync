@@ -388,18 +388,25 @@ namespace MQTTSync
             mergedDataSet.Locale = System.Globalization.CultureInfo.InvariantCulture;
             List<string> requestResults = new List<string>();
 
+            // if topic exist
             if (_topicMessages.ContainsKey(topicName))
             {
-                foreach (string message in _topicMessages[topicName])
+                // if messages exist
+                if (_topicMessages[topicName].Count > 0)
                 {
-                    requestResults.Add(MQTTElement.ParseDataToXML(message, topicName, out var parseError));
-                    if (parseError.Length > 0)
+                    //  local collection to avoid locking of public list
+                    var receivedTopicMessages = _topicMessages[topicName].ToArray();
+                    _topicMessages[topicName].Clear();
+                
+                    foreach (string message in receivedTopicMessages)
                     {
-                        throw new Exception(parseError);
+                        requestResults.Add(MQTTElement.ParseDataToXML(message, out var parseError));
+                        if (parseError.Length > 0)
+                        {
+                            throw new Exception(parseError);
+                        }
                     }
-                }
-
-                _topicMessages[topicName].Clear();
+                }                
             }
 
             if (requestResults.Count > 0)
@@ -448,7 +455,7 @@ namespace MQTTSync
             return stringArray;
         }
 
-        internal static string ParseDataToXML(string responseString, string topic, out string responseError)
+        internal static string ParseDataToXML(string responseString, out string responseError)
         {
             responseError = String.Empty;
 
