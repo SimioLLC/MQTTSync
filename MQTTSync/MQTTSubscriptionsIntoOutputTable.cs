@@ -63,7 +63,7 @@ namespace MQTTSync
             pd.Description = "MQTTElement holding MQTT connection information";
             pd.Required = true;    
 
-            pd = schema.AddStringProperty("SourceTopic", String.Empty);
+            pd = schema.AddExpressionProperty("SourceTopic", String.Empty);
             pd.DisplayName = "Source Topic";
             pd.Description = "The MQTT Topic where the data is to be retrieved.";
             pd.Required = true;
@@ -130,7 +130,8 @@ namespace MQTTSync
         public ExitType Execute(IStepExecutionContext context)
         {
             MQTTElement mqttElementProp = (MQTTElement)_mqttElementProp.GetElement(context);
-            String topic = _sourceTopicProp.GetStringValue(context);
+            var topicExpression = (IExpressionPropertyReader)_sourceTopicProp;
+            var topic = topicExpression.GetExpressionValue((IExecutionContext)context).ToString();
             ITableRuntimeData sourceTable = _destinationTableReaderProp.GetTableReference(context);
             double clearRowsBeforeGettingSubscriptionsDouble = _clearRowsBeforeGettingSubscriptionsProp.GetDoubleValue(context);
             bool clearRowsBeforeGettingSubscriptions = false;

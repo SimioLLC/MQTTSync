@@ -75,7 +75,7 @@ namespace MQTTSync
             pd.DefaultString = "True";
             pd.Required = true;
 
-            pd = schema.AddStringProperty("DestinationTopic",String.Empty);
+            pd = schema.AddExpressionProperty("DestinationTopic",String.Empty);
             pd.DisplayName = "Destination Topc";
             pd.Description = "The MQTT Topic name where the data is to be written.";
             pd.Required = true;
@@ -143,7 +143,8 @@ namespace MQTTSync
             double clearRowsAfterPublishDouble = _clearRowsAfterPublishProp.GetDoubleValue(context);
             bool clearRowsAfterPublish = false;
             if (clearRowsAfterPublishDouble > 0) clearRowsAfterPublish = true;
-            String topic = _destinationTopicProp.GetStringValue(context);
+            var topicExpression = (IExpressionPropertyReader)_destinationTopicProp;
+            var topic = topicExpression.GetExpressionValue((IExecutionContext)context).ToString();
             double qOSDouble = __qOSProp.GetDoubleValue(context);
             int qOS = (int)Math.Floor(qOSDouble);
             double retainMessageDouble = _retainMessageProp.GetDoubleValue(context);
