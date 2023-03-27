@@ -92,7 +92,7 @@ namespace MQTTSync
             pd.Required = true;
 
             pd = schema.AddStateProperty("Response");
-            pd.Description = "The state where the response will be read into.";
+            pd.Description = "The string state where the response will be read into.";
             pd.Required = true;
         }
 

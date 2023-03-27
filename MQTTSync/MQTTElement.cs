@@ -19,7 +19,7 @@ using System.Runtime.Remoting.Contexts;
 using System.Web;
 using System.Runtime.Remoting.Messaging;
 using System.Collections;
-
+using System.Web.Caching;
 
 namespace MQTTSync
 {
@@ -76,16 +76,22 @@ namespace MQTTSync
             pd.Description = "Port";
             pd.Required = true;
 
-            pd = schema.PropertyDefinitions.AddExpressionProperty("ClientId", "Name");
+            pd = schema.PropertyDefinitions.AddExpressionProperty("ClientId", "\"ModelId_\" + String.FromReal( ID )");
             pd.Description = "ClientId";
+            pd.Required = true;
+
+            pd = schema.PropertyDefinitions.AddBooleanProperty("SubscriptionEnabled");
+            pd.Description = "Subscription Enabled";
+            pd.DefaultString = "True";
             pd.Required = true;
 
             IRepeatGroupPropertyDefinition subscribeTopics = schema.PropertyDefinitions.AddRepeatGroupProperty("SubscribeTopics");
             subscribeTopics.Description = "Subscribe Topics.";
+            subscribeTopics.Required = false;
             pd = subscribeTopics.PropertyDefinitions.AddStringProperty("SubscribeTopic", String.Empty);
             pd.DisplayName = "Subscribe Topic";
             pd.Description = "Subscribe Topic.";
-            pd.Required = true;
+            pd.Required = false;
 
             pd = schema.PropertyDefinitions.AddRealProperty("QualityOfService", 0);
             pd.DisplayName = "Quality Of Service";
@@ -137,6 +143,7 @@ namespace MQTTSync
     class MQTTElement : IElement
     {
         IElementData _data;
+        bool _subscriptionEnabled = false;
         public MqttFactory MQTTFactory = null;
         public IManagedMqttClient MQTTClient = null;
         String _topic = String.Empty;
@@ -164,6 +171,10 @@ namespace MQTTSync
         /// </summary>
         public void Initialize()
         {
+            IPropertyReader subscriptionEnabledProp = _data.Properties.GetProperty("SubscriptionEnabled");
+            double subscriptionEnabledDouble = subscriptionEnabledProp.GetDoubleValue(_data.ExecutionContext);
+            if (subscriptionEnabledDouble > 0) _subscriptionEnabled = true;
+
             IPropertyReader brokerProp = _data.Properties.GetProperty("Broker");
             _broker = brokerProp.GetStringValue(_data.ExecutionContext);
 
@@ -201,18 +212,21 @@ namespace MQTTSync
 
             if (_minEventFrequency <= 0) throw new Exception("Min Event Property Must Be Greater Than Zero");
 
-            try
+            if (_subscriptionEnabled)
             {
-                var subscribeError = SubscribeTopicsAsync().Result;
-                if (subscribeError.Length > 0)
+                try
                 {
-                    throw new Exception(subscribeError);
+                    var subscribeError = SubscribeTopicsAsync().Result;
+                    if (subscribeError.Length > 0)
+                    {
+                        throw new Exception(subscribeError);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                var topicsStr = String.Join(",", _topics);
-                _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={_clientId}. Topic={topicsStr}. Err={ex.Message}");
+                catch (Exception ex)
+                {
+                    var topicsStr = String.Join(",", _topics);
+                    _data.ExecutionContext.ExecutionInformation.ReportError($"Could not Connect (is the Broker running?): ClientID={_clientId}. Topic={topicsStr}. Err={ex.Message}");
+                }
             }
         }
 
