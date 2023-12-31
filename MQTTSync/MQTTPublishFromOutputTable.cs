@@ -186,36 +186,11 @@ namespace MQTTSync
             }
 
             try
-            {
-                // for each parameter
-                string[,] stringArray = new string[numOfRows, numOfColumns];
-                for (int i = 0; i < numOfRows; i++)
-                {
-                    for (int j = 0; j < numOfColumns; j++)
-                    {
-                        double doubleValue = paramsArray[i, j] is double ? (double)paramsArray[i, j] : Double.NaN;
-                        if (!System.Double.IsNaN(doubleValue))
-                        {
-                            stringArray[i, j] = (Convert.ToString(doubleValue, CultureInfo.InvariantCulture));
-                        }
-                        else
-                        {
-                            DateTime datetimeValue = TryAsDateTime((Convert.ToString(paramsArray[i, j], CultureInfo.InvariantCulture)));
-                            if (datetimeValue > System.DateTime.MinValue)
-                            {
-                                stringArray[i, j] = (Convert.ToString(datetimeValue, CultureInfo.InvariantCulture));
-                            }
-                            else
-                            {
-                                stringArray[i, j] = (Convert.ToString(paramsArray[i, j], CultureInfo.InvariantCulture));
-                            }
-                        }
-                    }
-                }
+            {              
 
                 if (numOfRows > 0)
                 {
-                    var payload = mqttElementProp.GetMessageToPublish(stringArray, columnNames, numOfRows);
+                    var payload = mqttElementProp.GetMessageToPublish(paramsArray, columnNames, numOfRows);
                     var response = mqttElementProp.PublishMessageAsync(topic, payload, qOS, retainMessage).Result;
                     responseStringState.Value = response;
                     context.ExecutionInformation.TraceInformation($"Published Topic : '{topic} - Published Payload :'{payload}' - Response :'{response}'");
@@ -232,13 +207,29 @@ namespace MQTTSync
 
             // We are done writing, have the token proceed out of the primary exit
             return ExitType.FirstExit;
-        }      
+        }
 
-        string TryReadState(IState state)
-        {   
-            IStringState stringState = state as IStringState;
-            if (stringState == null) return String.Empty;
-            return stringState.Value;
+        object TryReadState(IState state)
+        {
+            IRealState realState = state as IRealState;
+            if (realState == null)
+            {
+                IDateTimeState dateTimeState = state as IDateTimeState;
+                if (dateTimeState == null)
+                {
+                    IStringState stringState = state as IStringState;
+                    if (stringState == null) return String.Empty;
+                    return stringState.Value;
+                }
+                else
+                {
+                    return dateTimeState.Value;
+                }
+            }
+            else
+            {
+                return realState.Value;
+            }
         }
 
         DateTime TryAsDateTime(string rawValue)

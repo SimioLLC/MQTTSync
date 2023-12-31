@@ -20,6 +20,7 @@ using System.Web;
 using System.Runtime.Remoting.Messaging;
 using System.Collections;
 using System.Web.Caching;
+using System.Globalization;
 
 namespace MQTTSync
 {
@@ -362,16 +363,24 @@ namespace MQTTSync
             return response;
         }
 
-        public string GetMessageToPublish(string[,] stringArray, string[] columnNames, int numOfRows)
+        public string GetMessageToPublish(object[,] paramsArray, string[] columnNames, int numOfRows)
         {
             // define data table
             DataTable dataTable = new DataTable();
             dataTable.Locale = System.Globalization.CultureInfo.InvariantCulture;
-            int numberOfColumns = (int)(stringArray.Length / numOfRows);
+            int numberOfColumns = (int)(paramsArray.Length / numOfRows);
 
             for (int i = 0; i < numberOfColumns; i++)
             {
-                dataTable.Columns.Add(columnNames[i]);
+                double d = 0.0;
+                if (Double.TryParse(paramsArray[0, i].ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out d))
+                {
+                    dataTable.Columns.Add(columnNames[i], d.GetType());
+                }
+                else
+                {
+                    dataTable.Columns.Add(columnNames[i]);
+                }
             }
 
             DataTable[] dataTables = { dataTable };
@@ -387,7 +396,7 @@ namespace MQTTSync
                     {
                         dataRow = dataTable.NewRow();
                     }
-                    dataRow[j] = stringArray[i, j];
+                    dataRow[j] = paramsArray[i, j];
                 }
                 dataTable.Rows.Add(dataRow);
             }
