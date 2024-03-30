@@ -65,9 +65,6 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Exporter.cs" />
-    <Compile Include="Importer.cs" />
-    <Compile Include="MQTTSyncUtils.cs" />
     <Compile Include="MQTTSubscriptionsIntoOutputTable.cs" />
     <Compile Include="MQTTPublishFromOutputTable.cs" />
     <Compile Include="MQTTElement.cs" />
